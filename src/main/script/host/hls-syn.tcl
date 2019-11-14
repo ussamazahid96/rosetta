@@ -5,9 +5,10 @@ set config_hwsrcdir [lindex $argv 3]
 puts "HW source dir: $config_hwsrcdir"
 set config_clkperiod [lindex $argv 4]
 puts "Clock period: $config_clkperiod"
+set config_proj_part [lindex $argv 5]
+puts "FPGA Chip: $config_proj_part"
 
 set config_toplevelfxn "BlackBoxJam"
-set config_proj_part "xc7z020clg400-1"
 
 # set up project
 set cppfiles [glob $config_hwsrcdir/*.cpp]

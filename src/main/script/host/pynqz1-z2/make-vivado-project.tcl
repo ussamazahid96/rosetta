@@ -13,7 +13,7 @@ set config_freq [lindex $argv 4]
 
 # fixed for platform
 set config_proj_part "xc7z020clg400-1"
-set xdc_dir "$config_rosetta_root/src/main/script/host"
+set xdc_dir "$config_rosetta_root/src/main/script/host/pynqz1-z2/"
 
 # set up project
 create_project $config_proj_name $config_proj_dir -part $config_proj_part

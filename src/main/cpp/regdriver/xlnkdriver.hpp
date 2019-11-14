@@ -52,7 +52,7 @@ extern "C" {
 #include <libxlnk_cma.h>
 }
 
-#include "wrapperregdriver.h"
+#include "wrapperregdriver.hpp"
 
 void loadBitfile(const char * accelName);
 

@@ -1,6 +1,6 @@
 #include <iostream>
 using namespace std;
-#include "platform.h"
+#include "platform.hpp"
 
 // this header file is generated during HLS synthesis,
 // and contains the register map addresses for accelerator I/O
