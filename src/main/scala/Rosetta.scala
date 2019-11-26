@@ -448,67 +448,67 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module {
       val statRegMap = statRegs.map(statRegToCPPMapEntry).reduce(_ + ", " + _)
 
       driverStr += s"""
-#ifndef ${driverName}_H
-#define ${driverName}_H
-#include "wrapperregdriver.h"
-#include <map>
-#include <string>
-#include <vector>
+  #ifndef ${driverName}_H
+  #define ${driverName}_H
+  #include "wrapperregdriver.h"
+  #include <map>
+  #include <string>
+  #include <vector>
 
-using namespace std;
-class $driverName 
-{
-public:
-  $driverName(WrapperRegDriver * platform) 
+  using namespace std;
+  class $driverName 
   {
-    m_platform = platform;
-    attach();
-  }
-  ~$driverName() 
-  {
-    detach();
-  }
+  public:
+    $driverName(WrapperRegDriver * platform) 
+    {
+      m_platform = platform;
+      attach();
+    }
+    ~$driverName() 
+    {
+      detach();
+    }
 
-$readWriteFxns
+  $readWriteFxns
 
-  map<string, vector<unsigned int>> getStatusRegs() 
-  {
-    map<string, vector<unsigned int>> ret = {$statRegMap};
-    return ret;
-  }
+    map<string, vector<unsigned int>> getStatusRegs() 
+    {
+      map<string, vector<unsigned int>> ret = {$statRegMap};
+      return ret;
+    }
 
-  AccelReg readStatusReg(string regName) 
-  {
-    map<string, vector<unsigned int>> statRegMap = getStatusRegs();
-    if(statRegMap[regName].size() != 1) 
-      throw ">32 bit status regs are not yet supported from readStatusReg";
-    return readReg(statRegMap[regName][0]);
-  }
+    AccelReg readStatusReg(string regName) 
+    {
+      map<string, vector<unsigned int>> statRegMap = getStatusRegs();
+      if(statRegMap[regName].size() != 1) 
+        throw ">32 bit status regs are not yet supported from readStatusReg";
+      return readReg(statRegMap[regName][0]);
+    }
 
-protected:
-  WrapperRegDriver * m_platform;
-  AccelReg readReg(unsigned int i) 
-  {
-    return m_platform->readReg(i);
-  }
-  
-  void writeReg(unsigned int i, AccelReg v) 
-  {
-    m_platform->writeReg(i,v);
-  }
-  
-  void attach() 
-  {
-    m_platform->attach("$driverName");
-  }
-  
-  void detach() 
-  {
-    m_platform->detach();
-  }
+  protected:
+    WrapperRegDriver * m_platform;
+    AccelReg readReg(unsigned int i) 
+    {
+      return m_platform->readReg(i);
+    }
+    
+    void writeReg(unsigned int i, AccelReg v) 
+    {
+      m_platform->writeReg(i,v);
+    }
+    
+    void attach() 
+    {
+      m_platform->attach("$driverName");
+    }
+    
+    void detach() 
+    {
+      m_platform->detach();
+    }
 
-};
-#endif
+  };
+  #endif
       """
 
       import java.io._

@@ -33,7 +33,7 @@ HWH_FILE := $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).srcs/sources_1/bd/procsys/hw_ha
 VIVADO_IN_PATH := $(shell command -v vivado 2> /dev/null)
 
 # note that all targets are phony targets, no proper dependency tracking
-.PHONY: hw_verilog hw_cpp hw_driver hw_vivadoproj bitfile pynq_hw pynq_sw pynq rsync test characterize check_vivado
+.PHONY: hw_verilog test_hw hw_cpp hw_driver hw_vivadoproj bitfile pynq_hw pynq_sw pynq rsync test characterize check_vivado
 
 check_vivado:
 	ifndef VIVADO_IN_PATH
@@ -47,6 +47,10 @@ characterize: check_vivado
 # generate Verilog for the Chisel accelerator
 hw_verilog:
 	$(SBT) $(SBT_FLAGS) "runMain rosetta.ChiselMain --backend v --targetDir $(BUILD_DIR_VERILOG)"
+
+# testing hardware using the chisel tester
+test_hw:
+	$(SBT) $(SBT_FLAGS) "test:runMain testhardware"
 
 # generate cycle-accurate C++ emulator sources for the Chisel accelerator
 hw_cpp:
