@@ -1,3 +1,3 @@
 #!/bin/sh
 
-g++ -std=c++11 *.cpp -lsds_lib -o app
+g++ -pthread -O3 -std=c++11 *.cpp -lcma -o app

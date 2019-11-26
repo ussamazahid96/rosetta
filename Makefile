@@ -5,7 +5,7 @@ VIVADO_MODE := batch # gui
 # which C++ compiler to use
 CC = g++
 # scp/rsync target to copy files to board
-BOARD_URI := xilinx@pynq:~/rosetta
+BOARD_URI := xilinx@192.168.3.1:~/
 
 # other project settings
 SBT ?= sbt
@@ -29,6 +29,7 @@ HW_VERILOG := $(BUILD_DIR_VERILOG)/PYNQWrapper.v
 BITFILE_PRJNAME := bitfile_synth
 BITFILE_PRJDIR := $(BUILD_DIR)/bitfile_synth
 GEN_BITFILE_PATH := $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).runs/impl_1/procsys_wrapper.bit
+HWH_FILE := $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).srcs/sources_1/bd/procsys/hw_handoff/procsys.hwh
 VIVADO_IN_PATH := $(shell command -v vivado 2> /dev/null)
 
 # note that all targets are phony targets, no proper dependency tracking
@@ -56,20 +57,20 @@ hw_driver:
 	mkdir -p "$(BUILD_DIR_HWDRV)"; $(SBT) $(SBT_FLAGS) "runMain rosetta.DriverMain $(BUILD_DIR_HWDRV) $(DRV_SRC_DIR)"
 
 # create a new Vivado project
-hw_vivadoproj: hw_verilog check_vivado
-	vivado -mode $(VIVADO_MODE) -source $(VIVADO_PROJ_SCRIPT) -tclargs $(TOP) $(HW_VERILOG) $(BITFILE_PRJNAME) $(BITFILE_PRJDIR) $(FREQ_MHZ)
+hw_vivadoproj: #hw_verilog check_vivado
+	vivado -mode $(VIVADO_MODE) -notrace -source $(VIVADO_PROJ_SCRIPT) -tclargs $(TOP) $(HW_VERILOG) $(BITFILE_PRJNAME) $(BITFILE_PRJDIR) $(FREQ_MHZ)
 
 # launch Vivado in GUI mode with created project
 launch_vivado_gui: check_vivado
 	vivado -mode gui $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).xpr
 
 # run bitfile synthesis for the Vivado project
-bitfile: hw_vivadoproj
-	vivado -mode $(VIVADO_MODE) -source $(VIVADO_SYNTH_SCRIPT) -tclargs $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).xpr
+bitfile: #hw_vivadoproj
+	vivado -mode $(VIVADO_MODE) -notrace -source $(VIVADO_SYNTH_SCRIPT) -tclargs $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).xpr
 
-# copy bitfile to the deployment folder, make an empty tcl script for bitfile loader
-pynq_hw: bitfile
-	mkdir -p $(BUILD_DIR_PYNQ); cp $(GEN_BITFILE_PATH) $(BUILD_DIR_PYNQ)/rosetta.bit; cp $(BITFILE_PRJDIR)/rosetta.tcl $(BUILD_DIR_PYNQ)/
+# copy bitfile to the deployment folder, make tcl script for bitfile loader
+pynq_hw: #bitfile
+	mkdir -p $(BUILD_DIR_PYNQ); cp $(GEN_BITFILE_PATH) $(BUILD_DIR_PYNQ)/rosetta.bit; cp $(BITFILE_PRJDIR)/rosetta.tcl $(BUILD_DIR_PYNQ)/; cp $(HWH_FILE) $(BUILD_DIR_PYNQ)/rosetta.hwh
 
 # copy all user sources and driver sources to the deployment folder
 pynq_sw: hw_driver
@@ -88,4 +89,4 @@ rsync:
 
 # remove everything that is built
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) vivado* NA .Xil

@@ -35,19 +35,19 @@ import scala.collection.mutable.LinkedHashMap
 class RosettaAcceleratorIF(numMemPorts: Int) extends Bundle {
   // memory ports to access DRAM. you can use components from fpgatidbits.dma to
   // read and write data through these
-  val memPort = Vec.fill(numMemPorts) {new GenericMemoryMasterPort(PYNQZ1Params.toMemReqParams())}
+  val memPort = Vec.fill(numMemPorts) {new GenericMemoryMasterPort(PYNQU96Params.toMemReqParams())}
   // use the signature field for sanity and version checks. auto-generated each
   // time the accelerator verilog is regenerated.
-  val signature = UInt(OUTPUT, PYNQZ1Params.csrDataBits)
+  val signature = UInt(OUTPUT, PYNQU96Params.csrDataBits)
   // user LEDs LD3..0
-  val led = UInt(OUTPUT, 4)
+  // val led = UInt(OUTPUT, 4)
   // user switches SW1 and SW0
-  val sw = UInt(INPUT, 2)
+  // val sw = UInt(INPUT, 2)
   // user buttons BN3..0
-  val btn = UInt(INPUT, 4)
+  // val btn = UInt(INPUT, 4)
   // user RGB LEDs
-  val led4 = Vec(3, UInt(OUTPUT, 1))
-  val led5 = Vec(3, UInt(OUTPUT, 1))
+  // val led4 = Vec(3, UInt(OUTPUT, 1))
+  // val led5 = Vec(3, UInt(OUTPUT, 1))
 }
 
 // base class for Rosetta accelerators
@@ -99,7 +99,7 @@ abstract class RosettaAccelerator() extends Module {
 // the wrapper, which contains the instantiated accelerator, register file,
 // and other components that bridge the accelerator to the rest of the PYNQ
 class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module {
-  val p = PYNQZ1Params
+  val p = PYNQU96Params
   val numPYNQMemPorts: Int = 4
   val io = new Bundle {
     // AXI slave interface for control-status registers
@@ -109,18 +109,18 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module {
       new AXIMasterIF(p.memAddrBits, p.memDataBits, p.memIDBits)
     }
     // user LEDs LD3..0
-    val led = UInt(OUTPUT, 4)
+    // val led = UInt(OUTPUT, 4)
     // user switches SW1 and SW0
-    val sw = UInt(INPUT, 2)
+    // val sw = UInt(INPUT, 2)
     // user buttons BN3..0
-    val btn = UInt(INPUT, 4)
+    // val btn = UInt(INPUT, 4)
     // user RGB LEDs LD4, LD5
-    val led4_r = UInt(OUTPUT, 1)
-    val led4_g = UInt(OUTPUT, 1)
-    val led4_b = UInt(OUTPUT, 1)
-    val led5_r = UInt(OUTPUT, 1)
-    val led5_g = UInt(OUTPUT, 1)
-    val led5_b = UInt(OUTPUT, 1)
+    // val led4_r = UInt(OUTPUT, 1)
+    // val led4_g = UInt(OUTPUT, 1)
+    // val led4_b = UInt(OUTPUT, 1)
+    // val led5_r = UInt(OUTPUT, 1)
+    // val led5_g = UInt(OUTPUT, 1)
+    // val led5_b = UInt(OUTPUT, 1)
   }
   setName("PYNQWrapper")
   setModuleName("PYNQWrapper")
@@ -237,15 +237,15 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module {
   for(i <- 0 until numPYNQMemPorts) {io.mem(i).renameSignals(s"mem$i")}
 
   // connections to board I/O
-  accel.io.sw := io.sw
-  accel.io.btn := io.btn
-  io.led := accel.io.led
-  io.led4_b := accel.io.led4(0)
-  io.led4_g := accel.io.led4(1)
-  io.led4_r := accel.io.led4(2)
-  io.led5_b := accel.io.led5(0)
-  io.led5_g := accel.io.led5(1)
-  io.led5_r := accel.io.led5(2)
+  // accel.io.sw := io.sw
+  // accel.io.btn := io.btn
+  // io.led := accel.io.led
+  // io.led4_b := accel.io.led4(0)
+  // io.led4_g := accel.io.led4(1)
+  // io.led4_r := accel.io.led4(2)
+  // io.led5_b := accel.io.led5(0)
+  // io.led5_g := accel.io.led5(1)
+  // io.led5_r := accel.io.led5(2)
 
   // memory port adapters and connections
   for(i <- 0 until accel.numMemPorts) {
@@ -448,45 +448,67 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module {
       val statRegMap = statRegs.map(statRegToCPPMapEntry).reduce(_ + ", " + _)
 
       driverStr += s"""
-  #ifndef ${driverName}_H
-  #define ${driverName}_H
-  #include "wrapperregdriver.h"
-  #include <map>
-  #include <string>
-  #include <vector>
+#ifndef ${driverName}_H
+#define ${driverName}_H
+#include "wrapperregdriver.h"
+#include <map>
+#include <string>
+#include <vector>
 
-  using namespace std;
-  class $driverName {
-  public:
-    $driverName(WrapperRegDriver * platform) {
-      m_platform = platform;
-      attach();
-    }
-    ~$driverName() {
-      detach();
-    }
+using namespace std;
+class $driverName 
+{
+public:
+  $driverName(WrapperRegDriver * platform) 
+  {
+    m_platform = platform;
+    attach();
+  }
+  ~$driverName() 
+  {
+    detach();
+  }
 
-    $readWriteFxns
+$readWriteFxns
 
-    map<string, vector<unsigned int>> getStatusRegs() {
-      map<string, vector<unsigned int>> ret = {$statRegMap};
-      return ret;
-    }
+  map<string, vector<unsigned int>> getStatusRegs() 
+  {
+    map<string, vector<unsigned int>> ret = {$statRegMap};
+    return ret;
+  }
 
-    AccelReg readStatusReg(string regName) {
-      map<string, vector<unsigned int>> statRegMap = getStatusRegs();
-      if(statRegMap[regName].size() != 1) throw ">32 bit status regs are not yet supported from readStatusReg";
-      return readReg(statRegMap[regName][0]);
-    }
+  AccelReg readStatusReg(string regName) 
+  {
+    map<string, vector<unsigned int>> statRegMap = getStatusRegs();
+    if(statRegMap[regName].size() != 1) 
+      throw ">32 bit status regs are not yet supported from readStatusReg";
+    return readReg(statRegMap[regName][0]);
+  }
 
-  protected:
-    WrapperRegDriver * m_platform;
-    AccelReg readReg(unsigned int i) {return m_platform->readReg(i);}
-    void writeReg(unsigned int i, AccelReg v) {m_platform->writeReg(i,v);}
-    void attach() {m_platform->attach("$driverName");}
-    void detach() {m_platform->detach();}
-  };
-  #endif
+protected:
+  WrapperRegDriver * m_platform;
+  AccelReg readReg(unsigned int i) 
+  {
+    return m_platform->readReg(i);
+  }
+  
+  void writeReg(unsigned int i, AccelReg v) 
+  {
+    m_platform->writeReg(i,v);
+  }
+  
+  void attach() 
+  {
+    m_platform->attach("$driverName");
+  }
+  
+  void detach() 
+  {
+    m_platform->detach();
+  }
+
+};
+#endif
       """
 
       import java.io._
