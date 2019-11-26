@@ -36,9 +36,9 @@ VIVADO_IN_PATH := $(shell command -v vivado 2> /dev/null)
 .PHONY: hw_verilog hw_cpp hw_driver hw_vivadoproj bitfile pynq_hw pynq_sw pynq rsync test characterize check_vivado
 
 check_vivado:
-ifndef VIVADO_IN_PATH
-    $(error "vivado not found in path")
-endif
+	ifndef VIVADO_IN_PATH
+	    $(error "vivado not found in path")
+	endif
 
 # run CharacterizeMain for resource/Fmax characterization
 characterize: check_vivado
@@ -57,7 +57,7 @@ hw_driver:
 	mkdir -p "$(BUILD_DIR_HWDRV)"; $(SBT) $(SBT_FLAGS) "runMain rosetta.DriverMain $(BUILD_DIR_HWDRV) $(DRV_SRC_DIR)"
 
 # create a new Vivado project
-hw_vivadoproj: #hw_verilog check_vivado
+hw_vivadoproj: hw_verilog check_vivado
 	vivado -mode $(VIVADO_MODE) -notrace -source $(VIVADO_PROJ_SCRIPT) -tclargs $(TOP) $(HW_VERILOG) $(BITFILE_PRJNAME) $(BITFILE_PRJDIR) $(FREQ_MHZ)
 
 # launch Vivado in GUI mode with created project
@@ -65,11 +65,11 @@ launch_vivado_gui: check_vivado
 	vivado -mode gui $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).xpr
 
 # run bitfile synthesis for the Vivado project
-bitfile: #hw_vivadoproj
+bitfile: hw_vivadoproj
 	vivado -mode $(VIVADO_MODE) -notrace -source $(VIVADO_SYNTH_SCRIPT) -tclargs $(BITFILE_PRJDIR)/$(BITFILE_PRJNAME).xpr
 
 # copy bitfile to the deployment folder, make tcl script for bitfile loader
-pynq_hw: #bitfile
+pynq_hw: bitfile
 	mkdir -p $(BUILD_DIR_PYNQ); cp $(GEN_BITFILE_PATH) $(BUILD_DIR_PYNQ)/rosetta.bit; cp $(BITFILE_PRJDIR)/rosetta.tcl $(BUILD_DIR_PYNQ)/; cp $(HWH_FILE) $(BUILD_DIR_PYNQ)/rosetta.hwh
 
 # copy all user sources and driver sources to the deployment folder
