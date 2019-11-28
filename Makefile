@@ -36,9 +36,9 @@ VIVADO_IN_PATH := $(shell command -v vivado 2> /dev/null)
 .PHONY: hw_verilog test_hw hw_cpp hw_driver hw_vivadoproj bitfile pynq_hw pynq_sw pynq rsync test characterize check_vivado
 
 check_vivado:
-	ifndef VIVADO_IN_PATH
-	    $(error "vivado not found in path")
-	endif
+ifndef VIVADO_IN_PATH
+    $(error "vivado not found in path")
+endif
 
 # run CharacterizeMain for resource/Fmax characterization
 characterize: check_vivado
