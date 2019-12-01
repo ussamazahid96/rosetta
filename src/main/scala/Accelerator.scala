@@ -1,6 +1,7 @@
 package rosetta
 
-import Chisel._
+import chisel3._
+import chisel3.experimental.{DataMirror, Direction}
 
 // add your custom accelerator here, derived from RosettaAccelerator
 
@@ -11,35 +12,26 @@ import Chisel._
 // cc: the number of clock cycles that have elapsed since last reset
 class TestRegOps() extends RosettaAccelerator {
   val numMemPorts = 0
-  val io = new RosettaAcceleratorIF(numMemPorts) {
-    val op = Vec.fill(2) {UInt(INPUT, width = 64)}
-    val sum = UInt(OUTPUT, width = 64)
-    val cc = UInt(OUTPUT, width = 32)
-  }
+  val io = IO(new RosettaAcceleratorIF(numMemPorts) {
+    val op = Input(Vec(2, UInt(64.W)))
+    val sum = Output(UInt(64.W))
+    val cc = Output(UInt(32.W))
+  })
   // wire sum output to sum of op inputs
   io.sum := io.op(0) + io.op(1)
 
   // instantiate a clock cycle counter register
-  val regCC = Reg(init = UInt(0, 32))
+  val regCC = RegInit(0.U(32.W))
+
   // increment counter by 1 every clock cycle
-  regCC := regCC + UInt(1)
+  regCC := regCC + 1.U
   // expose counter through the output called cc
   io.cc := regCC
 
-  // turn on colored lights when switches are activated
-
-  // io.led4(0) := io.sw(0)
-  // io.led5(1) := io.sw(0)
-  // io.led4(1) := io.sw(1)
-  // io.led5(2) := io.sw(1)
-
   // in addition to the signals we defined here, there are some signals that
   // are always present in the io bundle, as we derive from RosettaAcceleratorIF
-
   // the signature can be e.g. used for checking that the accelerator has the
   // correct version. here the signature is regenerated from the current date.
   io.signature := makeDefaultSignature()
   
-  // use the buttons to control the LEDs
-  // io.led := io.btn
 }

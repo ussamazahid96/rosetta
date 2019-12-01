@@ -51,6 +51,15 @@
 #include "platform.h"
 #include "xlnkdriver.hpp"
 
+#ifdef ULTRA
+  #define ADDR_REG_BASE 0xa0000000
+#elif defined PYNQ
+  #define ADDR_REG_BASE 0x43c00000
+#else
+  #error Board is not supported. Can not set REG_BASE_ADDR
+#endif
+
+
 extern "C" {
   #include <unistd.h>
   #include <sys/types.h>
@@ -71,7 +80,7 @@ void platformSIGINTHandler(int signum) {
 
 WrapperRegDriver* initPlatform() {
 	if (!platform) {
-		platform = new XlnkDriver(0xa0000000, 64 * 1024);
+		platform = new XlnkDriver(ADDR_REG_BASE, 64 * 1024);
 	}
 
 	struct sigaction action;
