@@ -1,6 +1,8 @@
 val chiselVersion = System.getProperty("chiselVersion", "3.2.0")
 val scalaVer = System.getProperty("scalaVer", "2.11.12")
 
+
+
 lazy val rosettaSettings = Seq (
   name := "rosetta_template",
   version := "0.1",

@@ -5,7 +5,7 @@ if {$argc != 5} {
 
 # pull cmdline variables to use during setup
 set config_rosetta_root  [lindex $argv 0]
-set config_rosetta_verilog "$config_rosetta_root/src/main/verilog"
+set config_rosetta_verilog "$config_rosetta_root/src/main/resources"
 set config_accel_verilog [lindex $argv 1]
 set config_proj_name [lindex $argv 2]
 set config_proj_dir [lindex $argv 3]
@@ -35,11 +35,21 @@ create_bd_design "procsys"
 source "${xdc_dir}/ultra96.tcl"
 set_property -dict [list CONFIG.PSU__USE__M_AXI_GP0 {1}] [get_bd_cells zynq_ultra_ps_e_0]
 
+# enable HP port to connect with the AXIMasterIF of the accelerator
+set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1}] [get_bd_cells zynq_ultra_ps_e_0]
+# set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1} CONFIG.PSU__USE__S_AXI_GP3 {1} CONFIG.PSU__USE__S_AXI_GP4 {1} CONFIG.PSU__USE__S_AXI_GP5 {1}] [get_bd_cells zynq_ultra_ps_e_0]
+
 # add the accelerator RTL module into the block design
 create_bd_cell -type module -reference RosettaWrapper RosettaWrapper_0
 
 # connect control-status registers
 apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config { Clk_master {Auto} Clk_slave {Auto} Clk_xbar {Auto} Master {/zynq_ultra_ps_e_0/M_AXI_HPM0_FPD} Slave {/RosettaWrapper_0/io_csr} ddr_seg {Auto} intc_ip {New AXI Interconnect} master_apm {0}}  [get_bd_intf_pins RosettaWrapper_0/io_csr]
+
+# connect the AXIMasterIF to the HP port of Zynq Ultrascale+
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_0" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
+# apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_1" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+# apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_2" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
+# apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_3" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP3_FPD]
 
 # rewire reset port to use active-high
 disconnect_bd_net [get_bd_nets rst_ps8_0_99M*peripheral_aresetn] [get_bd_pins RosettaWrapper_0/reset]

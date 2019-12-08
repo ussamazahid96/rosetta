@@ -1,15 +1,6 @@
 package fpgatidbits.PlatformWrapper
 
-// MemReqParams describes what memory requests look like
-class MemReqParams(
-  // all units are "number of bits"
-  val addrWidth: Int,       // width of memory addresses
-  val dataWidth: Int,       // width of reads/writes
-  val idWidth: Int,         // width of channel ID
-  val metaDataWidth: Int,   // width of metadata (cache, prot, etc.)
-  val sameIDInOrder: Boolean = true // whether requests with the same
-                                    // ID return in-order, like in AXI
-) {}
+import fpgatidbits.dma._
 
 
 trait PlatformWrapperParams {

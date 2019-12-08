@@ -73,10 +73,10 @@
 `define Q_srl
 
 
-module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
+module Q_srl (clock, reset, iData, iValid, iBackPressure, oData, oValid, oBackPressure, count);
 
    parameter depth = 16;   // - greatest #items in queue  (2 <= depth <= 256)
-   parameter width = 16;   // - width of data (i_d, o_d)
+   parameter width = 16;   // - width of data (iData, oData)
 
    `define LOG2 (  (((depth))     ==0) ? 0	/* - depth==0   LOG2=0 */ \
 		 : (((depth-1)>>0)==0) ? 0	/* - depth<=1   LOG2=0 */ \
@@ -107,13 +107,13 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
    input     clock;
    input     reset;
 
-   input  [width-1:0] i_d;	// - input  stream data (concat data + eos)
-   input              i_v;	// - input  stream valid
-   output             i_b;	// - input  stream back-pressure
+   input  [width-1:0] iData;	// - input  stream data (concat data + eos)
+   input              iValid;	// - input  stream valid
+   output             iBackPressure;	// - input  stream back-pressure
 
-   output [width-1:0] o_d;	// - output stream data (concat data + eos)
-   output             o_v;	// - output stream valid
-   input              o_b;	// - output stream back-pressure
+   output [width-1:0] oData;	// - output stream data (concat data + eos)
+   output             oValid;	// - output stream valid
+   input              oBackPressure;	// - output stream back-pressure
 
    output [addrwidth:0] count;  // - output number of elems in queue
 
@@ -125,9 +125,9 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
    reg    [width-1:0] 	  srlo_, srlo			// - SRLO  output reg
 			  /* synthesis syn_allow_retiming=0 */ ;
 
-   parameter state_empty = 2'd0;    // - state empty : o_v=0 o_d=UNDEFINED
-   parameter state_one   = 2'd1;    // - state one   : o_v=1 o_d=srlo
-   parameter state_more  = 2'd2;    // - state more  : o_v=1 o_d=srlo
+   parameter state_empty = 2'd0;    // - state empty : oValid=0 oData=UNDEFINED
+   parameter state_one   = 2'd1;    // - state one   : oValid=1 oData=srlo
+   parameter state_more  = 2'd2;    // - state more  : oValid=1 oData=srlo
 				    //     #items in srl = addr+2
 
    reg [1:0] state, state_;	    // - state register
@@ -135,21 +135,21 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
    wire      addr_full_;	    // - true iff addr==depth-2 on NEXT cycle
    reg       addr_full; 	    // - true iff addr==depth-2
    wire      addr_zero_;	    // - true iff addr==0
-   wire      o_v_reg_;		    // - true iff state_empty   on NEXT cycle
-   reg       o_v_reg  		    // - true iff state_empty
+   wire      oValid_reg_;		    // - true iff state_empty   on NEXT cycle
+   reg       oValid_reg  		    // - true iff state_empty
 	     /* synthesis syn_allow_retiming=0 */ ;
-   wire      i_b_reg_;		    // - true iff !full         on NEXT cycle
-   reg       i_b_reg  		    // - true iff !full
+   wire      iBackPressure_reg_;		    // - true iff !full         on NEXT cycle
+   reg       iBackPressure_reg  		    // - true iff !full
 	     /* synthesis syn_allow_retiming=0 */ ;
 
    assign addr_full_ = (state_==state_more) && (addr_==depth-2);
 						// - queue full
    assign addr_zero_ = (addr==0);		// - queue contains 2 (or 1,0)
-   assign o_v_reg_   = (state_!=state_empty);	// - output valid if non-empty
-   assign i_b_reg_   = addr_full_;		// - input bp if full
-   assign o_d = srlo;				// - output data from queue
-   assign o_v = o_v_reg;			// - output valid if non-empty
-   assign i_b = i_b_reg;			// - input bp if full
+   assign oValid_reg_   = (state_!=state_empty);	// - output valid if non-empty
+   assign iBackPressure_reg_   = addr_full_;		// - input bp if full
+   assign oData = srlo;				// - output data from queue
+   assign oValid = oValid_reg;			// - output valid if non-empty
+   assign iBackPressure = iBackPressure_reg;			// - input bp if full
 
    assign count = (state==state_more ? addr+2 : (state==state_one ? 1 : 0));
 
@@ -161,21 +161,21 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
 	 state     <= state_empty;
 	 addr      <= 0;
          addr_full <= 0;
-	 o_v_reg   <= 0;
-	 i_b_reg   <= 1;
+	 oValid_reg   <= 0;
+	 iBackPressure_reg   <= 1;
       end
       else begin
 	 state     <= state_;
 	 addr      <= addr_;
          addr_full <= addr_full_;
-	 o_v_reg   <= o_v_reg_;
-	 i_b_reg   <= i_b_reg_;
+	 oValid_reg   <= oValid_reg_;
+	 iBackPressure_reg   <= iBackPressure_reg_;
       end
    end // always @ (posedge clock)
 
    always @(posedge clock) begin	// - seq always: srlo
       // - infer enabled output reg at end of shift chain
-      // - input first element from i_d, all subsequent elements from SRL16
+      // - input first element from iData, all subsequent elements from SRL16
       if (reset) begin
 	 srlo <= 0;
       end
@@ -194,7 +194,7 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
 	 for (a_=depth-2; a_>0; a_=a_-1) begin
 	    srl[a_] <= srl[a_-1];
 	 end
-	 srl[0] <= i_d;
+	 srl[0] <= iData;
       end
    end // always @ (posedge clock or negedge reset)
 
@@ -207,14 +207,14 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
       case (state)
 
 	state_empty: begin		    // - (empty, will not produce)
-	      if (i_v) begin		    // - empty & i_v => consume
-		 srlo_       <= i_d;
+	      if (iValid) begin		    // - empty & iValid => consume
+		 srlo_       <= iData;
 		 shift_en_o_ <= 1;
 		 shift_en_   <= 1'bx;
 		 addr_       <= 0;
 		 state_      <= state_one;
 	      end
-	      else	begin		    // - empty & !i_v => idle
+	      else	begin		    // - empty & !iValid => idle
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 1'bx;
@@ -224,28 +224,28 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
 	end
 
 	state_one: begin		    // - (contains one)
-	      if (i_v && o_b) begin	    // - one & i_v & o_b => consume
+	      if (iValid && oBackPressure) begin	    // - one & iValid & oBackPressure => consume
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 1;
 		 addr_       <= 0;
 		 state_      <= state_more;
 	      end
-	      else if (i_v && !o_b) begin   // - one & i_v & !o_b => cons+prod
-		 srlo_       <= i_d;
+	      else if (iValid && !oBackPressure) begin   // - one & iValid & !oBackPressure => cons+prod
+		 srlo_       <= iData;
 		 shift_en_o_ <= 1;
 		 shift_en_   <= 1;
 		 addr_       <= 0;
 		 state_      <= state_one;
 	      end
-	      else if (!i_v && o_b) begin   // - one & !i_v & o_b => idle
+	      else if (!iValid && oBackPressure) begin   // - one & !iValid & oBackPressure => idle
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 1'bx;
 		 addr_       <= 0;
 		 state_      <= state_one;
 	      end
-	      else if (!i_v && !o_b) begin  // - one & !i_v & !o_b => produce
+	      else if (!iValid && !oBackPressure) begin  // - one & !iValid & !oBackPressure => produce
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 1'bx;
@@ -258,14 +258,14 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
 	   if (addr_full || (depth==2)) begin
 					    // - (full, will not consume)
 					    // - (full here if depth==2)
-	      if (o_b) begin		    // - full & o_b => idle
+	      if (oBackPressure) begin		    // - full & oBackPressure => idle
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 0;
 		 addr_       <= addr;
 		 state_      <= state_more;
 	      end
-	      else begin		    // - full & !o_b => produce
+	      else begin		    // - full & !oBackPressure => produce
 		 srlo_       <= srl[addr];
 		 shift_en_o_ <= 1;
 		 shift_en_   <= 0;
@@ -276,28 +276,28 @@ module Q_srl (clock, reset, i_d, i_v, i_b, o_d, o_v, o_b, count);
 	      end
 	   end
 	   else begin			    // - (mid: neither empty nor full)
-	      if (i_v && o_b) begin	    // - mid & i_v & o_b => consume
+	      if (iValid && oBackPressure) begin	    // - mid & iValid & oBackPressure => consume
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 1;
 		 addr_       <= addr+1;
 		 state_      <= state_more;
 	      end
-	      else if (i_v && !o_b) begin   // - mid & i_v & !o_b => cons+prod
+	      else if (iValid && !oBackPressure) begin   // - mid & iValid & !oBackPressure => cons+prod
 		 srlo_       <= srl[addr];
 		 shift_en_o_ <= 1;
 		 shift_en_   <= 1;
 		 addr_       <= addr;
 		 state_      <= state_more;
 	      end
-	      else if (!i_v && o_b) begin   // - mid & !i_v & o_b => idle
+	      else if (!iValid && oBackPressure) begin   // - mid & !iValid & oBackPressure => idle
 		 srlo_       <= 'bx;
 		 shift_en_o_ <= 0;
 		 shift_en_   <= 0;
 		 addr_       <= addr;
 		 state_      <= state_more;
 	      end
-	      else if (!i_v && !o_b) begin  // - mid & !i_v & !o_b => produce
+	      else if (!iValid && !oBackPressure) begin  // - mid & !iValid & !oBackPressure => produce
 		 srlo_       <= srl[addr];
 		 shift_en_o_ <= 1;
 		 shift_en_   <= 0;

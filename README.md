@@ -1,7 +1,7 @@
 # Rosetta (upgraded to chisel3)
 Rosetta is a project template to rapidly deploy chisel3 and Vivado HLS accelerators on the Xilinx PYNQ/Ultra96 platform. It uses the PlatformWrapper components from the fpga-tidbits framework for easy memory mapped register file management. 
 
-For Chisel accelerators, use the chisel3 branch. For Vivado HLS accelerators, use the hls branch. For now chisel3 branch has a minimal example which uses AXILite interface to add to unsigned integers. Examples with AXIMaster and AXIStream will be added in the near future.
+For Chisel accelerators, use the chisel3 branch. For Vivado HLS accelerators, use the hls branch. For now chisel3 branch has a two examples. One uses AXILite interface to add two unsigned integers. And the other one shows how to use AXIMaster interface to read from DRAM.
 
 ## Requirements
 1. A working Chisel3 and sbt setup.

@@ -6,6 +6,8 @@ import chisel3.core.{Element, Aggregate}
 import chisel3.experimental.{DataMirror, Direction}
 
 import fpgatidbits.axi._
+import fpgatidbits.dma._
+import fpgatidbits.ocm._
 import fpgatidbits.regfile._
 import fpgatidbits.PlatformWrapper._
 
@@ -39,6 +41,7 @@ import scala.collection.mutable.LinkedHashMap
 class RosettaAcceleratorIF(numMemPorts: Int) extends Bundle { 
   // use the signature field for sanity and version checks. auto-generated each
   // time the accelerator verilog is regenerated.
+  val memPort = Vec(numMemPorts, new GenericMemoryMasterPort(PYNQU96Params.toMemReqParams()))
   val signature = Output(UInt(PYNQU96Params.csrDataBits.W))
 }
 
@@ -65,8 +68,23 @@ abstract class RosettaAccelerator() extends Module {
     val dateString = dateFormat.format(date);
     val fullSignature = this.getClass.getSimpleName + "-" + dateString
     val hexSignature = "h" + hexcrc32(fullSignature)
-    println("Signature of the hardware is = "+hexSignature)
+    println("Signature of the hardware is = "+hexcrc32(fullSignature))
     return hexSignature.U
+  }
+  
+  // drive default values for memory read port i
+  def plugMemReadPort(i: Int) {
+    io.memPort(i).memRdReq.valid := false.B
+    io.memPort(i).memRdReq.bits.driveDefaults()
+    io.memPort(i).memRdRsp.ready := false.B
+  }
+  // drive default values for memory write port i
+  def plugMemWritePort(i: Int) {
+    io.memPort(i).memWrReq.valid := false.B
+    io.memPort(i).memWrReq.bits.driveDefaults()
+    io.memPort(i).memWrDat.valid := false.B
+    io.memPort(i).memWrDat.bits := 0.U
+    io.memPort(i).memWrRsp.ready := false.B
   }
 }
 
@@ -75,10 +93,15 @@ abstract class RosettaAccelerator() extends Module {
 class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module 
 {
   val p = PYNQU96Params
-  val numPYNQMemPorts: Int = 4
+  val numPYNQMemPorts: Int = 1
   val io = IO(new Bundle {
+    
     // AXI slave interface for control-status registers
     val csr = new AXILiteSlaveIF(p.memAddrBits, p.csrDataBits)
+    
+    // AXI master interfaces for reading and writing memory
+    val mem = Vec(numPYNQMemPorts, new AXIMasterIF(p.memAddrBits, p.memDataBits, p.memIDBits))
+
   })
 
   // instantiate the accelerator
@@ -98,11 +121,13 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
   // separate out the mem port signals, won't map the to the regfile
   val ownFilter = { x: (String, Data) => !(x._1.startsWith("memPort"))}
   import scala.collection.immutable.ListMap
+  
   // two utility functions added for mapping the Vec in IOs to seperate Reg File entries
   def flatten(data: Data): Seq[Element] = data match {
     case elt: Element => Seq(elt)
     case agg: Aggregate => agg.getElements.flatMap(flatten)
   }
+
   def process_vec(map: ListMap[String, Data]): ListMap[String, Data] = {
     val dynamic_map: LinkedHashMap[String, Data] = LinkedHashMap.empty[String, Data]
     for ((k,v) <- map)
@@ -122,6 +147,7 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
     val immutable_map: ListMap[String, Data] = ListMap.empty[String, Data] ++ dynamic_map
     immutable_map
   }
+  
   val temp = process_vec(accel.io.elements)
   val ownIO = ListMap(temp.filter(ownFilter).toSeq.sortBy(_._1):_*)  
 
@@ -229,6 +255,85 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
     }
   }
 
+  // memory port adapters and connections
+  for(i <- 0 until accel.numMemPorts) {
+    // instantiate AXI request and response adapters for the mem interface
+    val mrp = p.toMemReqParams()
+    // read requests
+    val readReqAdp = Module(new AXIMemReqAdp(mrp)).io
+    readReqAdp.genericReqIn <> accel.io.memPort(i).memRdReq
+
+    io.mem(i).ARADDR := readReqAdp.axiReqOut.bits.ADDR   
+    io.mem(i).ARSIZE := readReqAdp.axiReqOut.bits.SIZE
+    io.mem(i).ARLEN := readReqAdp.axiReqOut.bits.LEN
+    io.mem(i).ARBURST := readReqAdp.axiReqOut.bits.BURST
+    io.mem(i).ARID := readReqAdp.axiReqOut.bits.ID
+    io.mem(i).ARLOCK := readReqAdp.axiReqOut.bits.LOCK     
+    io.mem(i).ARCACHE := readReqAdp.axiReqOut.bits.CACHE
+    io.mem(i).ARPROT := readReqAdp.axiReqOut.bits.PROT
+    io.mem(i).ARQOS := readReqAdp.axiReqOut.bits.QOS
+    io.mem(i).ARVALID := readReqAdp.axiReqOut.valid
+    readReqAdp.axiReqOut.ready := io.mem(i).ARREADY
+
+    // read responses
+    val readRspAdp = Module(new AXIReadRspAdp(mrp)).io
+
+    readRspAdp.axiReadRspIn.bits.RDATA := io.mem(i).RDATA
+    readRspAdp.axiReadRspIn.bits.RID := io.mem(i).RID
+    readRspAdp.axiReadRspIn.bits.RLAST := io.mem(i).RLAST
+    readRspAdp.axiReadRspIn.bits.RRESP := io.mem(i).RRESP
+    readRspAdp.axiReadRspIn.valid := io.mem(i).RVALID
+    io.mem(i).RREADY := readRspAdp.axiReadRspIn.ready
+
+    readRspAdp.genericRspOut <> accel.io.memPort(i).memRdRsp
+    
+    // write requests
+    val writeReqAdp = Module(new AXIMemReqAdp(mrp)).io
+    writeReqAdp.genericReqIn <> accel.io.memPort(i).memWrReq
+
+    io.mem(i).AWADDR := writeReqAdp.axiReqOut.bits.ADDR   
+    io.mem(i).AWSIZE := writeReqAdp.axiReqOut.bits.SIZE
+    io.mem(i).AWLEN := writeReqAdp.axiReqOut.bits.LEN
+    io.mem(i).AWBURST := writeReqAdp.axiReqOut.bits.BURST
+    io.mem(i).AWID := writeReqAdp.axiReqOut.bits.ID
+    io.mem(i).AWLOCK := writeReqAdp.axiReqOut.bits.LOCK     
+    io.mem(i).AWCACHE := writeReqAdp.axiReqOut.bits.CACHE
+    io.mem(i).AWPROT := writeReqAdp.axiReqOut.bits.PROT
+    io.mem(i).AWQOS := writeReqAdp.axiReqOut.bits.QOS
+    io.mem(i).AWVALID := writeReqAdp.axiReqOut.valid
+    writeReqAdp.axiReqOut.ready := io.mem(i).AWREADY
+
+    // write data
+    // add a small write data queue to ensure we can provide both req ready and
+    // data ready at the same time (otherwise this is up to the AXI slave)
+    val wrDataQ = FPGAQueue(accel.io.memPort(i).memWrDat, 2)
+    // TODO handle this with own adapter?
+    io.mem(i).WDATA := wrDataQ.bits
+    // TODO fix this: forces all writes bytelanes valid!
+    io.mem(i).WSTRB := ~(0.U((p.memDataBits/8).W))
+
+    // TODO fix this: write bursts won't work properly!
+    io.mem(i).WLAST := true.B
+    io.mem(i).WVALID := wrDataQ.valid
+    wrDataQ.ready := io.mem(i).WREADY
+    
+    // write responses
+    val writeRspAdp = Module(new AXIWriteRspAdp(mrp)).io
+    writeRspAdp.axiWriteRspIn.bits.BID := io.mem(i).BID
+    writeRspAdp.axiWriteRspIn.bits.BRESP := io.mem(i).BRESP
+    writeRspAdp.axiWriteRspIn.valid := io.mem(i).BVALID
+    io.mem(i).BREADY := writeRspAdp.axiWriteRspIn.ready
+    writeRspAdp.genericRspOut <> accel.io.memPort(i).memWrRsp
+  }
+
+
+  // the accelerator may be using fewer memory ports than what the platform
+  // exposes; plug the unused ones
+  for(i <- accel.numMemPorts until numPYNQMemPorts) {
+    println("Plugging unused memory port "+ i.toString)
+    io.mem(i).driveDefaults()
+  }
+
   // ==========================================================================
   // wrapper part 2: bridging to PYNQ signals
   // here we will instantiate various adapters and similar components to make
@@ -267,7 +372,6 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
   // in one element to get the regFile ind
   // Note that this permits reading/writing only the entire width of one
   // register
-  // val addrDiv = UInt((p.csrDataBits/8).W)
 
   val addrDiv = (p.csrDataBits/8).U
   
@@ -387,6 +491,7 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
       for((name, bits) <- ownIO) {
         if(DataMirror.directionOf(bits) == Direction.Input) {
           readWriteFxns += makeRegWriteFxn(name) + "\n"
+          // readWriteFxns += makeRegReadFxn(name) + "\n"
         } else if(DataMirror.directionOf(bits) == Direction.Output) {
           readWriteFxns += makeRegReadFxn(name) + "\n"
         }
