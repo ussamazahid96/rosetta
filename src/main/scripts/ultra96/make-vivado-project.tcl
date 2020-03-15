@@ -5,7 +5,7 @@ if {$argc != 5} {
 
 # pull cmdline variables to use during setup
 set config_rosetta_root  [lindex $argv 0]
-set config_rosetta_verilog "$config_rosetta_root/src/main/resources"
+set config_rosetta_verilog "$config_rosetta_root/src/main/resources/"
 set config_accel_verilog [lindex $argv 1]
 set config_proj_name [lindex $argv 2]
 set config_proj_dir [lindex $argv 3]
@@ -14,8 +14,7 @@ puts $config_rosetta_verilog
 # fixed for platform
 # Ultra96
 set config_proj_part "xczu3eg-sbva484-1-i"
-
-set xdc_dir "$config_rosetta_root/src/main/script/host/ultra96"
+set xdc_dir "$config_rosetta_root/src/main/scripts/ultra96/"
 
 # set up project
 create_project $config_proj_name $config_proj_dir -part $config_proj_part
@@ -36,7 +35,8 @@ source "${xdc_dir}/ultra96.tcl"
 set_property -dict [list CONFIG.PSU__USE__M_AXI_GP0 {1}] [get_bd_cells zynq_ultra_ps_e_0]
 
 # enable HP port to connect with the AXIMasterIF of the accelerator
-set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1}] [get_bd_cells zynq_ultra_ps_e_0]
+# set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1}] [get_bd_cells zynq_ultra_ps_e_0]
+set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1} CONFIG.PSU__USE__S_AXI_GP3 {1}] [get_bd_cells zynq_ultra_ps_e_0]
 # set_property -dict [list CONFIG.PSU__USE__S_AXI_GP2 {1} CONFIG.PSU__USE__S_AXI_GP3 {1} CONFIG.PSU__USE__S_AXI_GP4 {1} CONFIG.PSU__USE__S_AXI_GP5 {1}] [get_bd_cells zynq_ultra_ps_e_0]
 
 # add the accelerator RTL module into the block design
@@ -47,7 +47,7 @@ apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config { Clk_master {Auto} Cl
 
 # connect the AXIMasterIF to the HP port of Zynq Ultrascale+
 apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_0" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
-# apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_1" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_1" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
 # apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_2" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
 # apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_3" Clk "Auto" }  [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP3_FPD]
 
@@ -60,7 +60,7 @@ regenerate_bd_layout
 validate_bd_design
 save_bd_design
 # write block design tcl
-write_bd_tcl $config_proj_dir/rosetta.tcl
+# write_bd_tcl $config_proj_dir/rosetta.tcl
 
 # create HDL wrapper
 make_wrapper -files [get_files $config_proj_dir/$config_proj_name.srcs/sources_1/bd/procsys/procsys.bd] -top

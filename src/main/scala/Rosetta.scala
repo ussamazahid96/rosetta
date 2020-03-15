@@ -93,7 +93,7 @@ abstract class RosettaAccelerator() extends Module {
 class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module 
 {
   val p = PYNQU96Params
-  val numPYNQMemPorts: Int = 1
+  val numPYNQMemPorts: Int = 2
   val io = IO(new Bundle {
     
     // AXI slave interface for control-status registers
@@ -441,45 +441,60 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
     }
 
     // ==========================================================================
-    // wrapper part 3: register driver generation functions
-    // these functions will be called to generate C++ code that accesses the
-    // register file that we have instantiated
+    // wrapper part 3: pynq driver generation functions
+    // these functions will be called to generate python code that accesses the
+    // register file that we have instantiated via pynq package
     // ==========================================================================
 
     def makeRegReadFxn(regName: String): String = {
       var fxnStr: String = ""
       val regs = regFileMap(regName)
-      if(regs.size == 1) {
+      if(regs.size == 1) 
+      {
         // single register read
-        fxnStr += "  AccelReg get_" + regName + "()"
-        fxnStr += " {return readReg(" + regs(0).toString + ");} "
-      } else if(regs.size == 2) {
+        fxnStr += "\tdef get_" + regName + "(self):\n"
+        fxnStr += "\t\treturn self.mmio.read(self.offset*" + regs(0).toString + ")\n"
+      } 
+      else if(regs.size == 2) 
+      {
         // two-register read
         // TODO this uses a hardcoded assumption about wCSR=32
-        if(wCSR != 32) throw new Exception("Violating assumption on wCSR=32")
-        fxnStr += "  AccelDblReg get_" + regName + "() "
-        fxnStr += "{ return (AccelDblReg)readReg("+regs(1).toString+") << 32 "
-        fxnStr += "| (AccelDblReg)readReg("+regs(0).toString+"); }"
-      } else { throw new Exception("Multi-reg reads not yet implemented") }
-
+        if(wCSR != 32) 
+          throw new Exception("Violating assumption on wCSR=32")
+        fxnStr += "\tdef get_" + regName + "(self):\n"
+        fxnStr += "\t\tvalue_high = self.mmio.read(self.offset*"+regs(1).toString+")\n"
+        fxnStr += "\t\tvalue_low = self.mmio.read(self.offset*"+regs(0).toString+")\n"
+        fxnStr += "\t\treturn value_high << 32 | value_low\n"
+      } 
+      else 
+      { 
+        throw new Exception("Multi-reg reads not yet implemented") 
+      }
       return fxnStr
     }
 
     def makeRegWriteFxn(regName: String): String = {
       var fxnStr: String = ""
       val regs = regFileMap(regName)
-      if(regs.size == 1) {
+      if(regs.size == 1) 
+      {
         // single register write
-        fxnStr += "  void set_" + regName + "(AccelReg value)"
-        fxnStr += " {writeReg(" + regs(0).toString + ", value);} "
-      } else if(regs.size == 2) {
+        fxnStr += "\tdef set_" + regName + "(self, value):\n"
+        fxnStr += "\t\tself.mmio.write(self.offset*"+ regs(0).toString + ", value)\n"
+      } 
+      else if(regs.size == 2) 
+      {
         // two-register write
         // TODO this uses a hardcoded assumption about wCSR=32
-        if(wCSR != 32) throw new Exception("Violating assumption on wCSR=32")
-        fxnStr += "  void set_" + regName + "(AccelDblReg value)"
-        fxnStr += " { writeReg("+regs(0).toString+", (AccelReg)(value >> 32)); "
-        fxnStr += "writeReg("+regs(1).toString+", (AccelReg)(value & 0xffffffff)); }"
-      } else { throw new Exception("Multi-reg writes not yet implemented") }
+        if(wCSR != 32) 
+          throw new Exception("Violating assumption on wCSR=32")
+        fxnStr += "\tdef set_" + regName + "(self, value):\n"
+        fxnStr += "\t\tvalue_high = value >> 32\n"
+        fxnStr += "\t\tvalue_low = value & 0xffffffff\n"
+        fxnStr += "\t\tself.mmio.write(self.offset*"+regs(0).toString+", value_high)\n"
+        fxnStr += "\t\tself.mmio.write(self.offset*"+regs(1).toString+", value_low)\n"
+      } 
+      else { throw new Exception("Multi-reg writes not yet implemented") }
 
       return fxnStr
     }
@@ -488,11 +503,15 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
       var driverStr: String = ""
       val driverName: String = accel.name
       var readWriteFxns: String = ""
-      for((name, bits) <- ownIO) {
-        if(DataMirror.directionOf(bits) == Direction.Input) {
+      for((name, bits) <- ownIO) 
+      {
+        if(DataMirror.directionOf(bits) == Direction.Input) 
+        {
           readWriteFxns += makeRegWriteFxn(name) + "\n"
           // readWriteFxns += makeRegReadFxn(name) + "\n"
-        } else if(DataMirror.directionOf(bits) == Direction.Output) {
+        } 
+        else if(DataMirror.directionOf(bits) == Direction.Output) 
+        {
           readWriteFxns += makeRegReadFxn(name) + "\n"
         }
       }
@@ -505,74 +524,22 @@ class RosettaWrapper(instFxn: () => RosettaAccelerator) extends Module
       val statRegMap = statRegs.map(statRegToCPPMapEntry).reduce(_ + ", " + _)
 
       driverStr += s"""
-  #ifndef ${driverName}_H
-  #define ${driverName}_H
-  #include "wrapperregdriver.h"
-  #include <map>
-  #include <string>
-  #include <vector>
+import pynq
 
-  using namespace std;
-  class $driverName 
-  {
-  public:
-    $driverName(WrapperRegDriver * platform) 
-    {
-      m_platform = platform;
-      attach();
-    }
-    ~$driverName() 
-    {
-      detach();
-    }
+class ${driverName}:
+\tdef __init__(self):
+\t\tself.overlay = pynq.Overlay('rosetta.bit', download=True)
+\t\tself.mmio = self.overlay.RosettaWrapper_0.io_csr.mmio
+\t\tself.offset = 4
 
-  $readWriteFxns
-
-    map<string, vector<unsigned int>> getStatusRegs() 
-    {
-      map<string, vector<unsigned int>> ret = {$statRegMap};
-      return ret;
-    }
-
-    AccelReg readStatusReg(string regName) 
-    {
-      map<string, vector<unsigned int>> statRegMap = getStatusRegs();
-      if(statRegMap[regName].size() != 1) 
-        throw ">32 bit status regs are not yet supported from readStatusReg";
-      return readReg(statRegMap[regName][0]);
-    }
-
-  protected:
-    WrapperRegDriver * m_platform;
-    AccelReg readReg(unsigned int i) 
-    {
-      return m_platform->readReg(i);
-    }
-    
-    void writeReg(unsigned int i, AccelReg v) 
-    {
-      m_platform->writeReg(i,v);
-    }
-    
-    void attach() 
-    {
-      m_platform->attach("$driverName");
-    }
-    
-    void detach() 
-    {
-      m_platform->detach();
-    }
-
-  };
-  #endif
+$readWriteFxns
       """
 
       import java.io._
-      val writer = new PrintWriter(new File(targetDir+"/"+driverName+".hpp" ))
+      val writer = new PrintWriter(new File(targetDir+"/"+driverName+".py" ))
       writer.write(driverStr)
       writer.close()
-      println("=======> Driver written to "+driverName+".hpp")
+      println("=======> Driver written to "+driverName+".py")
 
     }
 }

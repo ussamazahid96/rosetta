@@ -5,15 +5,16 @@ if {$argc != 5} {
 
 # pull cmdline variables to use during setup
 set config_rosetta_root  [lindex $argv 0]
-set config_rosetta_verilog "$config_rosetta_root/src/main/verilog"
+set config_rosetta_verilog "$config_rosetta_root/src/main/resources/"
 set config_accel_verilog [lindex $argv 1]
 set config_proj_name [lindex $argv 2]
 set config_proj_dir [lindex $argv 3]
 set config_freq [lindex $argv 4]
 puts $config_rosetta_verilog
 # fixed for platform
+# PynqZ1-Z2
 set config_proj_part "xc7z020clg400-1"
-set xdc_dir "$config_rosetta_root/src/main/script/host/pynqz1-z2"
+set xdc_dir "$config_rosetta_root/src/main/scripts/pynqz1-z2/"
 
 # set up project
 create_project $config_proj_name $config_proj_dir -part $config_proj_part
@@ -35,13 +36,22 @@ apply_bd_automation -rule xilinx.com:bd_rule:processing_system7 -config {make_ex
 source "${xdc_dir}/pynq_revC.tcl"
 set_property -dict [apply_preset $ps7] $ps7
 
-# FPGA clocks
+# FPGA clocks and HP ports
+# set_property -dict [list CONFIG.PCW_USE_S_AXI_HP0 {1}] $ps7
+set_property -dict [list CONFIG.PCW_USE_S_AXI_HP0 {1} CONFIG.PCW_USE_S_AXI_HP1 {1}] $ps7
+
+# set_property -dict [list CONFIG.PCW_USE_S_AXI_HP0 {1} CONFIG.PCW_USE_S_AXI_HP1 {1} CONFIG.PCW_USE_S_AXI_HP2 {1} CONFIG.PCW_USE_S_AXI_HP3 {1}] $ps7
 set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ $config_freq CONFIG.PCW_FPGA1_PERIPHERAL_FREQMHZ {142.86} CONFIG.PCW_FPGA2_PERIPHERAL_FREQMHZ {200} CONFIG.PCW_FPGA3_PERIPHERAL_FREQMHZ {166.67} CONFIG.PCW_EN_CLK1_PORT {1} CONFIG.PCW_EN_CLK2_PORT {1} CONFIG.PCW_EN_CLK3_PORT {1} CONFIG.PCW_USE_M_AXI_GP0 {1}] $ps7
 
 # add the accelerator RTL module into the block design
 create_bd_cell -type module -reference RosettaWrapper RosettaWrapper_0
+
 # connect control-status registers
 apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/ps7/M_AXI_GP0" Clk "Auto" }  [get_bd_intf_pins RosettaWrapper_0/io_csr]
+
+# connect the AXIMasterIF to the HP port of Zynq
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_0" Clk "Auto" }  [get_bd_intf_pins ps7/S_AXI_HP0]
+apply_bd_automation -rule xilinx.com:bd_rule:axi4 -config {Master "/RosettaWrapper_0/io_mem_1" Clk "Auto" }  [get_bd_intf_pins ps7/S_AXI_HP1]
 
 # rewire reset port to use active-high
 disconnect_bd_net [get_bd_nets rst_ps7*peripheral_aresetn] [get_bd_pins RosettaWrapper_0/reset]
@@ -52,7 +62,7 @@ regenerate_bd_layout
 validate_bd_design
 save_bd_design
 # write block design tcl
-write_bd_tcl $config_proj_dir/rosetta.tcl
+# write_bd_tcl $config_proj_dir/rosetta.tcl
 
 # create HDL wrapper
 make_wrapper -files [get_files $config_proj_dir/$config_proj_name.srcs/sources_1/bd/procsys/procsys.bd] -top
